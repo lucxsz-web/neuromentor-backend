@@ -22,7 +22,10 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
 
     <!-- Banco em memória para testes de integração dos controllers -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.6" />
+    <!-- Fixa a versão do Relational para evitar o aviso MSB3277 de versões conflitantes
+         (Npgsql 10.0.1 puxa 10.0.4; Design 10.0.6 puxa 10.0.6) -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.6" />
   </ItemGroup>
 
   <!-- Necessário para instanciar controllers ASP.NET Core (ControllerContext, FormFile, DefaultHttpContext) -->
