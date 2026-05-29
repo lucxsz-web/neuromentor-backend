@@ -16,10 +16,10 @@ public class AuthController(AppDbContext db, JwtService jwt) : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest req)
     {
-        if (await db.Users.AnyAsync(u => u.Email == req.Email.ToLower()))
+        if (await db.Users.AnyAsync(u => u.Email == req.Email.Trim().ToLower()))
             return Conflict(new { error = "Email já cadastrado." });
 
-        if (!Enum.TryParse<UserRole>(req.Role, ignoreCase: true, out var role))
+        if (!Enum.TryParse<UserRole>(req.Role, ignoreCase: true, out var role) || !Enum.IsDefined(role))
             return BadRequest(new { error = "Role inválido. Use 'Student' ou 'Teacher'." });
 
         var user = new User

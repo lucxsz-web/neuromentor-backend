@@ -61,8 +61,8 @@ public class TextExtractionService
             // Skip empty / whitespace-only
             if (string.IsNullOrWhiteSpace(t)) continue;
 
-            // Skip lone page numbers: "1", "2", "Page 3", "- 4 -", "3 of 50"
-            if (Regex.IsMatch(t, @"^[-–—\s]*[Pp]age\s*\d+[-–—\s\w]*$")) continue;
+            // Skip lone page numbers: "1", "2", "Page 3", "Página 3", "Pág. 3", "- 4 -", "3 of 50"
+            if (Regex.IsMatch(t, @"^[-–—\s]*([Pp]age|[Pp][áa]gina|[Pp][áa]g\.?)\s*\d+[-–—\s\w]*$")) continue;
             if (Regex.IsMatch(t, @"^\d+\s*(of\s*\d+)?$")) continue;
             if (Regex.IsMatch(t, @"^[-–—]\s*\d+\s*[-–—]$")) continue;
 
