@@ -1,0 +1,7 @@
+# Artefatos gerados pelo Reqnroll (code-behind dos .feature) — regenerados a cada build
+*.feature.cs
+
+# Saídas de build/cobertura
+bin/
+obj/
+TestResults/
