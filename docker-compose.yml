@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16
+    container_name: neuromentor-db
+    environment:
+      POSTGRES_USER: neuromentor
+      POSTGRES_PASSWORD: neuromentor
+      POSTGRES_DB: neuromentor
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neuromentor -d neuromentor"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    container_name: neuromentor-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Connection string (formato Npgsql) apontando para o serviço "db"
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=neuromentor;Username=neuromentor;Password=neuromentor"
+      # JWT (apenas para dev local — troque em produção)
+      Jwt__Key: "chave-de-desenvolvimento-local-com-mais-de-32-caracteres-123456"
+      Jwt__Issuer: "neuromentor-api"
+      Jwt__Audience: "neuromentor-frontend"
+      # Chave da Anthropic: defina ANTHROPIC_API_KEY no seu ambiente para usar a IA.
+      # A API sobe sem ela; só os endpoints de IA falham se a chave for inválida.
+      Anthropic__ApiKey: "${ANTHROPIC_API_KEY:-sk-ant-placeholder}"
+      # Origens permitidas (CORS) para o frontend local
+      AllowedOrigins__0: "http://localhost:3000"
+      AllowedOrigins__1: "https://localhost:3000"
+      ASPNETCORE_URLS: "http://+:8080"
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
