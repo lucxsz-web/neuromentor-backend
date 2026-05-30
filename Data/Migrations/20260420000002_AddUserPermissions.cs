@@ -1,9 +1,13 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using NeuroMentor.Api.Data;
 
 #nullable disable
 
 namespace NeuroMentor.Api.Data.Migrations;
 
+[DbContext(typeof(AppDbContext))]
+[Migration("20260420000002_AddUserPermissions")]
 public partial class AddUserPermissions : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
