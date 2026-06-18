@@ -1,16 +1,14 @@
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using System.Runtime.CompilerServices;
 
 namespace NeuroMentor.Api.Services;
 
-public class ClaudeService(HttpClient http, IConfiguration config) : IAiService
+public class OpenAiService(HttpClient http, IConfiguration config) : IAiService
 {
-  private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
-
-  private string ApiKey => config["Anthropic:ApiKey"]!;
-  private const string Model = "claude-sonnet-4-5";
+  private string ApiKey => config["OpenAI:ApiKey"]!;
+  private string Model => config["OpenAI:Model"] ?? "gpt-4o";
 
   public async Task<string> CompleteAsync(string system, string userPrompt, int maxTokens = 2000)
   {
@@ -18,13 +16,15 @@ public class ClaudeService(HttpClient http, IConfiguration config) : IAiService
     {
       model = Model,
       max_tokens = maxTokens,
-      system,
-      messages = new[] { new { role = "user", content = userPrompt } }
+      messages = new object[]
+        {
+                new { role = "system", content = system },
+                new { role = "user", content = userPrompt },
+        }
     };
 
-    using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
-    req.Headers.Add("x-api-key", ApiKey);
-    req.Headers.Add("anthropic-version", "2023-06-01");
+    using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
+    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
     req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
     var res = await http.SendAsync(req);
@@ -33,8 +33,9 @@ public class ClaudeService(HttpClient http, IConfiguration config) : IAiService
     var json = await res.Content.ReadAsStringAsync();
     using var doc = JsonDocument.Parse(json);
     return doc.RootElement
-        .GetProperty("content")[0]
-        .GetProperty("text")
+        .GetProperty("choices")[0]
+        .GetProperty("message")
+        .GetProperty("content")
         .GetString() ?? "";
   }
 
@@ -44,18 +45,25 @@ public class ClaudeService(HttpClient http, IConfiguration config) : IAiService
       int maxTokens = 1500,
       [EnumeratorCancellation] CancellationToken ct = default)
   {
+    // Build OpenAI messages array: system + conversation messages
+    var openAiMessages = new List<object> { new { role = "system", content = system } };
+
+    foreach (var msg in messages)
+    {
+      // Messages come as anonymous objects with role/content from the controllers
+      openAiMessages.Add(msg);
+    }
+
     var payload = new
     {
       model = Model,
       max_tokens = maxTokens,
       stream = true,
-      system,
-      messages
+      messages = openAiMessages,
     };
 
-    using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
-    req.Headers.Add("x-api-key", ApiKey);
-    req.Headers.Add("anthropic-version", "2023-06-01");
+    using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
+    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
     req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
     var res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -74,12 +82,14 @@ public class ClaudeService(HttpClient http, IConfiguration config) : IAiService
 
       using var doc = JsonDocument.Parse(data);
       var root = doc.RootElement;
-      if (root.TryGetProperty("type", out var t) && t.GetString() == "content_block_delta")
+      if (root.TryGetProperty("choices", out var choices))
       {
-        if (root.TryGetProperty("delta", out var delta) &&
-            delta.TryGetProperty("text", out var text))
+        var delta = choices[0].GetProperty("delta");
+        if (delta.TryGetProperty("content", out var content))
         {
-          yield return text.GetString() ?? "";
+          var text = content.GetString();
+          if (!string.IsNullOrEmpty(text))
+            yield return text;
         }
       }
     }

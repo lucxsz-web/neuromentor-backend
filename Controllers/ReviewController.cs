@@ -10,21 +10,26 @@ namespace NeuroMentor.Api.Controllers;
 [ApiController]
 [Route("api/review")]
 [Authorize]
-public class ReviewController(AppDbContext db, ClaudeService claude) : ControllerBase
+public class ReviewController(AppDbContext db, IAiService claude) : ControllerBase
 {
-    private bool HasAiAccess => User.FindFirstValue("isAiEnabled") == "True";
+  private bool HasAiAccess => User.FindFirstValue("isAiEnabled") == "True";
 
-    [HttpPost("generate")]
-    public async Task<IActionResult> Generate(GenerateReviewRequest req)
-    {
-        if (!HasAiAccess) return Forbid();
-        var lesson = req.LessonId.HasValue ? await db.Lessons.FindAsync(req.LessonId.Value) : null;
-        var material = req.Context ?? lesson?.RawText ?? "";
+  /// <summary>Gera um guia de revisão personalizado com base nos erros do aluno.</summary>
+  [HttpPost("generate")]
+  [ProducesResponseType(200)]
+  [ProducesResponseType(401)]
+  [ProducesResponseType(403)]
+  [ProducesResponseType(500)]
+  public async Task<IActionResult> Generate(GenerateReviewRequest req)
+  {
+    if (!HasAiAccess) return Forbid();
+    var lesson = req.LessonId.HasValue ? await db.Lessons.FindAsync(req.LessonId.Value) : null;
+    var material = req.Context ?? lesson?.RawText ?? "";
 
-        var wrongList = string.Join("\n", req.WrongAnswers.Select((q, i) => $"{i + 1}. {q}"));
+    var wrongList = string.Join("\n", req.WrongAnswers.Select((q, i) => $"{i + 1}. {q}"));
 
-        var matRef = material.Length > 0 ? $"\nMaterial de referência:\n{material[..Math.Min(10000, material.Length)]}" : "";
-        var prompt = $$"""
+    var matRef = material.Length > 0 ? $"\nMaterial de referência:\n{material[..Math.Min(10000, material.Length)]}" : "";
+    var prompt = $$"""
             O aluno errou as seguintes questões:
             {{wrongList}}
             {{matRef}}
@@ -42,10 +47,10 @@ public class ReviewController(AppDbContext db, ClaudeService claude) : Controlle
             }
             """;
 
-        var raw = await claude.CompleteAsync(NeuroPersona.ReviewPlanner, prompt, 1500);
-        var start = raw.IndexOf('{'); var end = raw.LastIndexOf('}');
-        if (start == -1 || end == -1) return StatusCode(500, new { error = "Resposta inválida da IA." });
+    var raw = await claude.CompleteAsync(NeuroPersona.ReviewPlanner, prompt, 1500);
+    var start = raw.IndexOf('{'); var end = raw.LastIndexOf('}');
+    if (start == -1 || end == -1) return StatusCode(500, new { error = "Resposta inválida da IA." });
 
-        return Ok(System.Text.Json.JsonDocument.Parse(raw[start..(end + 1)]).RootElement);
-    }
+    return Ok(System.Text.Json.JsonDocument.Parse(raw[start..(end + 1)]).RootElement);
+  }
 }

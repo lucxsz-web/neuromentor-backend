@@ -13,95 +13,116 @@ namespace NeuroMentor.Api.Controllers;
 [Route("api/auth")]
 public class AuthController(AppDbContext db, JwtService jwt) : ControllerBase
 {
-    [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterRequest req)
+  /// <summary>Registra um novo usuário (aluno ou professor).</summary>
+  [HttpPost("register")]
+  [ProducesResponseType(200)]
+  [ProducesResponseType(400)]
+  [ProducesResponseType(409)]
+  public async Task<IActionResult> Register(RegisterRequest req)
+  {
+    if (await db.Users.AnyAsync(u => u.Email == req.Email.Trim().ToLower()))
+      return Conflict(new { error = "Email já cadastrado." });
+
+    if (!Enum.TryParse<UserRole>(req.Role, ignoreCase: true, out var role) || !Enum.IsDefined(role))
+      return BadRequest(new { error = "Role inválido. Use 'Student' ou 'Teacher'." });
+
+    var user = new User
     {
-        if (await db.Users.AnyAsync(u => u.Email == req.Email.Trim().ToLower()))
-            return Conflict(new { error = "Email já cadastrado." });
+      Name = req.Name.Trim(),
+      Email = req.Email.Trim().ToLower(),
+      PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+      Role = role,
+      IsAiEnabled = role == UserRole.Teacher,
+    };
 
-        if (!Enum.TryParse<UserRole>(req.Role, ignoreCase: true, out var role) || !Enum.IsDefined(role))
-            return BadRequest(new { error = "Role inválido. Use 'Student' ou 'Teacher'." });
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
 
-        var user = new User
-        {
-            Name = req.Name.Trim(),
-            Email = req.Email.Trim().ToLower(),
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
-            Role = role,
-        };
+    return Ok(BuildResponse(user));
+  }
 
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
+  /// <summary>Autentica o usuário e retorna token JWT.</summary>
+  [HttpPost("login")]
+  [ProducesResponseType(200)]
+  [ProducesResponseType(401)]
+  public async Task<IActionResult> Login(LoginRequest req)
+  {
+    var user = await db.Users.FirstOrDefaultAsync(u => u.Email == req.Email.Trim().ToLower());
+    if (user is null || !BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
+      return Unauthorized(new { error = "Email ou senha inválidos." });
 
-        return Ok(BuildResponse(user));
-    }
+    return Ok(BuildResponse(user));
+  }
 
-    [HttpPost("login")]
-    public async Task<IActionResult> Login(LoginRequest req)
-    {
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == req.Email.Trim().ToLower());
-        if (user is null || !BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
-            return Unauthorized(new { error = "Email ou senha inválidos." });
+  /// <summary>Altera a senha do usuário autenticado.</summary>
+  [Authorize]
+  [HttpPut("change-password")]
+  [ProducesResponseType(200)]
+  [ProducesResponseType(400)]
+  [ProducesResponseType(401)]
+  [ProducesResponseType(404)]
+  public async Task<IActionResult> ChangePassword(ChangePasswordRequest req)
+  {
+    var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    var user = await db.Users.FindAsync(userId);
+    if (user is null) return NotFound();
 
-        return Ok(BuildResponse(user));
-    }
+    if (!BCrypt.Net.BCrypt.Verify(req.CurrentPassword, user.PasswordHash))
+      return BadRequest(new { error = "Senha atual incorreta." });
 
-    [Authorize]
-    [HttpPut("change-password")]
-    public async Task<IActionResult> ChangePassword(ChangePasswordRequest req)
-    {
-        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var user = await db.Users.FindAsync(userId);
-        if (user is null) return NotFound();
+    if (req.NewPassword.Length < 6)
+      return BadRequest(new { error = "A nova senha deve ter pelo menos 6 caracteres." });
 
-        if (!BCrypt.Net.BCrypt.Verify(req.CurrentPassword, user.PasswordHash))
-            return BadRequest(new { error = "Senha atual incorreta." });
+    user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.NewPassword);
+    await db.SaveChangesAsync();
+    return Ok(new { message = "Senha alterada com sucesso." });
+  }
 
-        if (req.NewPassword.Length < 6)
-            return BadRequest(new { error = "A nova senha deve ter pelo menos 6 caracteres." });
+  /// <summary>Atualiza o perfil do usuário autenticado.</summary>
+  [Authorize]
+  [HttpPut("profile")]
+  [ProducesResponseType(200)]
+  [ProducesResponseType(401)]
+  [ProducesResponseType(404)]
+  public async Task<IActionResult> UpdateProfile(UpdateProfileRequest req)
+  {
+    var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    var user = await db.Users.FindAsync(userId);
+    if (user is null) return NotFound();
 
-        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.NewPassword);
-        await db.SaveChangesAsync();
-        return Ok(new { message = "Senha alterada com sucesso." });
-    }
+    user.Name = req.Name.Trim();
+    user.PhotoUrl = req.PhotoUrl;
+    user.Matricula = req.Matricula;
+    user.Subject = req.Subject;
+    await db.SaveChangesAsync();
 
-    [Authorize]
-    [HttpPut("profile")]
-    public async Task<IActionResult> UpdateProfile(UpdateProfileRequest req)
-    {
-        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var user = await db.Users.FindAsync(userId);
-        if (user is null) return NotFound();
+    return Ok(BuildResponse(user));
+  }
 
-        user.Name = req.Name.Trim();
-        user.PhotoUrl = req.PhotoUrl;
-        user.Matricula = req.Matricula;
-        user.Subject = req.Subject;
-        await db.SaveChangesAsync();
+  /// <summary>Retorna os dados do usuário autenticado.</summary>
+  [Authorize]
+  [HttpGet("me")]
+  [ProducesResponseType(200)]
+  [ProducesResponseType(401)]
+  [ProducesResponseType(404)]
+  public async Task<IActionResult> Me()
+  {
+    var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    var user = await db.Users.FindAsync(userId);
+    if (user is null) return NotFound();
+    return Ok(BuildResponse(user));
+  }
 
-        return Ok(BuildResponse(user));
-    }
-
-    [Authorize]
-    [HttpGet("me")]
-    public async Task<IActionResult> Me()
-    {
-        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var user = await db.Users.FindAsync(userId);
-        if (user is null) return NotFound();
-        return Ok(BuildResponse(user));
-    }
-
-    private AuthResponse BuildResponse(User user) => new(
-        Token: jwt.Generate(user),
-        Id: user.Id.ToString(),
-        Name: user.Name,
-        Email: user.Email,
-        Role: user.Role.ToString().ToLower(),
-        PhotoUrl: user.PhotoUrl,
-        Matricula: user.Matricula,
-        Subject: user.Subject,
-        IsAiEnabled: user.IsAiEnabled,
-        IsAdmin: user.IsAdmin
-    );
+  private AuthResponse BuildResponse(User user) => new(
+      Token: jwt.Generate(user),
+      Id: user.Id.ToString(),
+      Name: user.Name,
+      Email: user.Email,
+      Role: user.Role.ToString().ToLower(),
+      PhotoUrl: user.PhotoUrl,
+      Matricula: user.Matricula,
+      Subject: user.Subject,
+      IsAiEnabled: user.IsAiEnabled,
+      IsAdmin: user.IsAdmin
+  );
 }
