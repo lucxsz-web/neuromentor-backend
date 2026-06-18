@@ -183,6 +183,14 @@ O backend é um serviço independente pelos seguintes motivos:
 
 ---
 
+## QA Validation
+
+Este repositório inclui uma marcação de validação QA para o revisor:
+
+- `QA Validator: ADM`
+
+---
+
 ## 3. Concorrência e Paralelismo
 
 ### Mecanismo 1 — Async/Await em Todos os Controllers

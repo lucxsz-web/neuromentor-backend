@@ -122,5 +122,5 @@ Aprovado!  – Com falha: 0, Aprovado: 3, Ignorado: 0, Total: 3
 Aprovado!  – Com falha: 0, Aprovado: 56, Ignorado: 0, Total: 56
 ```
 
-**Conclusão:** os três defeitos foram corrigidos no código de produção, validados por testes
+**Conclusão:** Os três defeitos foram corrigidos no código de produção, validados por testes
 automatizados dedicados, e a execução completa da suíte confirma a **ausência de regressões**.
