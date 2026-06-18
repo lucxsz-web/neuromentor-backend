@@ -101,7 +101,7 @@
   Com falha Limpeza remove marcadores de página em português
    Assert.DoesNotContain() Failure: Sub-string found
   ```
-- **Causa-raiz:** a expressão regular de remoção de números de página cobria apenas `[Pp]age`.
+- **Causa-raiz:** A expressão regular de remoção de números de página cobria apenas `[Pp]age`.
 - **Correção (`Services/TextExtractionService.cs`):**
   ```diff
   - // Skip lone page numbers: "1", "2", "Page 3", "- 4 -", "3 of 50"
