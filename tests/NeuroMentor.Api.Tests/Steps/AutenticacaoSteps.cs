@@ -5,6 +5,7 @@ using NeuroMentor.Api.Models;
 using NeuroMentor.Api.Tests.Support;
 using Reqnroll;
 using Xunit;
+using NeuroMentor.Api.Services;
 
 namespace NeuroMentor.Api.Tests.Steps;
 
@@ -70,5 +71,11 @@ public class AutenticacaoSteps(TestWorld world)
     {
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(_token);
         Assert.Equal(valor, jwt.Claims.First(c => c.Type == claim).Value);
+    }
+
+    [Then(@"o repositório deve conter o validador QA")]
+    public void EntaoRepositorioTemQaValidator()
+    {
+        Assert.Equal("ADM", RepositoryInfo.QaValidator);
     }
 }
